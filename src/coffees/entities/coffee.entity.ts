@@ -1,6 +1,24 @@
+import {
+  Column,
+  Entity,
+  JoinTable,
+  ManyToMany,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
+import { Flavor } from './flavor.entity';
+
+@Entity()
 export class Coffee {
-  id: number;
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
+
+  @Column()
   name: string;
+
+  @Column()
   brand: string;
-  flavors: string[];
+
+  @JoinTable()
+  @ManyToMany(() => Flavor, { cascade: ['insert', 'update'] })
+  flavors: Flavor[];
 }

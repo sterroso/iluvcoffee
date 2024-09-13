@@ -11,37 +11,37 @@ import {
 import { CoffeesService } from './coffees.service';
 import { CreateCoffeeDto } from './dto/create-coffee.dto';
 import { UpdateCoffeeDto } from './dto/update-coffee.dto';
+import { PaginationQueryDto } from 'src/common/dto/pagination-query.dto';
 
 @Controller('coffees')
 export class CoffeesController {
   constructor(private readonly coffeesService: CoffeesService) {}
 
   @Get()
-  findAll(@Query('page') page: number, @Query('limit') limit: number) {
-    return this.coffeesService.findAll(page, limit);
+  async findAll(@Query() paginationQueryDto: PaginationQueryDto) {
+    return await this.coffeesService.findAll(paginationQueryDto);
   }
 
   @Get(':id')
-  findOneById(@Param('id') id: number) {
-    return this.coffeesService.findOneById(id);
+  async findOneById(@Param('id') id: string) {
+    return await this.coffeesService.findOneById(id);
   }
 
   @Post()
-  create(@Body() createCoffeeDto: CreateCoffeeDto) {
-    return this.coffeesService.create(createCoffeeDto);
+  async create(@Body() createCoffeeDto: CreateCoffeeDto) {
+    return await this.coffeesService.create(createCoffeeDto);
   }
 
   @Put(':id')
-  update(@Param('id') id: number, @Body() updateCoffeeDto: UpdateCoffeeDto) {
-    return this.coffeesService.update(id, updateCoffeeDto);
+  async update(
+    @Param('id') id: string,
+    @Body() updateCoffeeDto: UpdateCoffeeDto,
+  ) {
+    return await this.coffeesService.update(id, updateCoffeeDto);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: number) {
-    if (this.coffeesService.remove(id)) {
-      return {
-        message: `Coffee with ID '${id}' was successfully deleted.`,
-      };
-    }
+  async remove(@Param('id') id: string) {
+    return await this.coffeesService.remove(id);
   }
 }

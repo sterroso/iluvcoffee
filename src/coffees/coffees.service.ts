@@ -2,81 +2,90 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { Coffee } from './entities/coffee.entity';
 import { CreateCoffeeDto } from './dto/create-coffee.dto';
 import { UpdateCoffeeDto } from './dto/update-coffee.dto';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Flavor } from './entities/flavor.entity';
+import { PaginationQueryDto } from 'src/common/dto/pagination-query.dto';
 
 @Injectable()
 export class CoffeesService {
-  private coffees: Coffee[] = [
-    {
-      id: 1,
-      name: 'Palenque Extra',
-      brand: 'Mouldy Coffee',
-      flavors: ['Vanilla', 'Irish Cream'],
-    },
-  ];
+  constructor(
+    @InjectRepository(Coffee)
+    private readonly coffeeRepository: Repository<Coffee>,
+    @InjectRepository(Flavor)
+    private readonly flavorRepository: Repository<Flavor>,
+  ) {}
 
-  findAll(page?: number, limit?: number): Coffee[] {
-    if (!page || page < 1) {
-      page = 1;
-    }
+  async findAll(paginationQueryDto: PaginationQueryDto): Promise<Coffee[]> {
+    const { page, limit } = paginationQueryDto;
+    const take = limit && limit > 1 ? limit : 10;
+    const skip = page && page > 0 ? (page - 1) * take : 0;
 
-    if (!limit || limit < 2) {
-      limit = 10;
-    }
-
-    const startIndex = limit * (page - 1);
-    const endIndex = Math.min(startIndex + limit, this.coffees.length);
-
-    return this.coffees.slice(startIndex, endIndex);
+    return await this.coffeeRepository.find({
+      skip,
+      take,
+      order: { id: 'asc' },
+      relations: { flavors: true },
+    });
   }
 
-  findOneById(id: number): Coffee {
-    const coffee = this.coffees.find((coffee) => coffee.id === +id);
+  async findOneById(id: string): Promise<Coffee> {
+    const existingCoffee = await this.coffeeRepository.findOne({
+      where: { id },
+      relations: { flavors: true },
+    });
+
+    if (!existingCoffee) {
+      throw new NotFoundException(`Coffee with ID '${id}', not found.`);
+    }
+
+    return existingCoffee;
+  }
+
+  async create(createCoffeeDto: CreateCoffeeDto): Promise<Coffee> {
+    const flavors = await Promise.all(
+      createCoffeeDto.flavors.map((name) => this.preloadFlavorByName(name)),
+    );
+
+    const coffee = this.coffeeRepository.create({
+      ...createCoffeeDto,
+      flavors,
+    });
+
+    return await this.coffeeRepository.save(coffee);
+  }
+
+  async update(id: string, updateCoffeeDto: UpdateCoffeeDto): Promise<Coffee> {
+    const flavors =
+      updateCoffeeDto.flavors &&
+      (await Promise.all(
+        updateCoffeeDto.flavors.map((name) => this.preloadFlavorByName(name)),
+      ));
+    const coffee = await this.coffeeRepository.preload({
+      id: id,
+      ...updateCoffeeDto,
+      flavors,
+    });
 
     if (!coffee) {
-      throw new NotFoundException(`Coffee with ID '${id}' was not found.`);
+      throw new NotFoundException(`Coffee with ID '${id}', not found.`);
     }
 
-    return coffee;
+    return await this.coffeeRepository.save(coffee);
   }
 
-  create(createCoffeeDto: CreateCoffeeDto) {
-    const newId = Math.max(...this.coffees.map((coffee) => coffee.id)) + 1;
-    this.coffees.push({ ...createCoffeeDto, id: newId });
-
-    return this.findOneById(newId);
+  async remove(id: string): Promise<Coffee> {
+    const coffee = await this.findOneById(id);
+    return await this.coffeeRepository.remove(coffee);
   }
 
-  update(id: number, updateCoffeeDto: UpdateCoffeeDto) {
-    const existingCoffeeIndex = this.coffees.findIndex(
-      (coffee) => coffee.id === id,
-    );
+  private async preloadFlavorByName(name: string): Promise<Flavor> {
+    const flavor = await this.flavorRepository.findOne({
+      where: { name },
+    });
 
-    if (existingCoffeeIndex < 0) {
-      throw new NotFoundException(`Coffee with ID '${id}' was not found.`);
-    }
+    if (flavor) return flavor;
 
-    const updatedCoffee = {
-      ...this.coffees[existingCoffeeIndex],
-      ...updateCoffeeDto,
-      id,
-    };
-
-    this.coffees.splice(existingCoffeeIndex, 1, updatedCoffee);
-
-    return updatedCoffee;
-  }
-
-  remove(id: number) {
-    const existingCoffeeIndex = this.coffees.findIndex(
-      (coffee) => coffee.id === id,
-    );
-
-    if (existingCoffeeIndex < 0) {
-      throw new NotFoundException(`Coffee with ID '${id}' was not found.`);
-    }
-
-    this.coffees.splice(existingCoffeeIndex, 1);
-
-    return true;
+    return this.flavorRepository.create({ name });
   }
 }
